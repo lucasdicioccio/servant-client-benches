@@ -1,0 +1,119 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 08593e0f93b61d6f140d7311d587c6c11aeed64a7c5c95f23782509de3aa32b3
+
+name:           servant-client-benches
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/servant-client-benches#readme>
+homepage:       https://github.com/githubuser/servant-client-benches#readme
+bug-reports:    https://github.com/githubuser/servant-client-benches/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2018 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/servant-client-benches
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_servant_client_benches
+  hs-source-dirs:
+      src
+  build-depends:
+      aeson
+    , async
+    , base >=4.7 && <5
+    , data-default-class
+    , exceptions
+    , http-client
+    , http-client-tls
+    , http2
+    , http2-client
+    , mtl
+    , servant
+    , servant-client
+    , servant-http2-client
+    , servant-server
+    , text
+    , timeit
+    , tls
+    , transformers
+    , warp >=3.2.24
+    , warp-tls
+  default-language: Haskell2010
+
+executable servant-client-benches-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_servant_client_benches
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , async
+    , base >=4.7 && <5
+    , data-default-class
+    , exceptions
+    , http-client
+    , http-client-tls
+    , http2
+    , http2-client
+    , mtl
+    , servant
+    , servant-client
+    , servant-client-benches
+    , servant-http2-client
+    , servant-server
+    , text
+    , timeit
+    , tls
+    , transformers
+    , warp >=3.2.24
+    , warp-tls
+  default-language: Haskell2010
+
+test-suite servant-client-benches-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_servant_client_benches
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , async
+    , base >=4.7 && <5
+    , data-default-class
+    , exceptions
+    , http-client
+    , http-client-tls
+    , http2
+    , http2-client
+    , mtl
+    , servant
+    , servant-client
+    , servant-client-benches
+    , servant-http2-client
+    , servant-server
+    , text
+    , timeit
+    , tls
+    , transformers
+    , warp >=3.2.24
+    , warp-tls
+  default-language: Haskell2010
