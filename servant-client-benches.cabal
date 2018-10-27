@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 08593e0f93b61d6f140d7311d587c6c11aeed64a7c5c95f23782509de3aa32b3
+-- hash: 74e94b31cfb2e565125c45f272d7f560afcfd1a23cf86eb8ba16eb9f4ef9cca3
 
 name:           servant-client-benches
 version:        0.1.0.0
@@ -36,6 +36,8 @@ library
       aeson
     , async
     , base >=4.7 && <5
+    , bytestring
+    , connection
     , data-default-class
     , exceptions
     , http-client
@@ -66,6 +68,8 @@ executable servant-client-benches-exe
       aeson
     , async
     , base >=4.7 && <5
+    , bytestring
+    , connection
     , data-default-class
     , exceptions
     , http-client
@@ -98,6 +102,8 @@ test-suite servant-client-benches-test
       aeson
     , async
     , base >=4.7 && <5
+    , bytestring
+    , connection
     , data-default-class
     , exceptions
     , http-client

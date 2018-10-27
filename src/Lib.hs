@@ -3,6 +3,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Lib
     ( someFunc
@@ -14,11 +16,14 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Async
 import Control.Concurrent.QSem
 import Control.Monad (replicateM, when, forever)
+import Network.Connection
 import Data.Aeson
 import Data.Default.Class (def)
-import Data.Either (rights)
+import Data.Either (lefts,rights)
 import Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.ByteString.Char8 as ByteString
+import qualified Data.ByteString.Lazy.Char8 as LByteString
 import GHC.Generics
 import GHC.TypeLits
 import Network.Wai.Handler.Warp
@@ -26,32 +31,34 @@ import Network.Wai.Handler.WarpTLS
 import Servant
 import Servant.Client
 import qualified Network.HTTP2 as HTTP2
-import Network.HTTP.Client hiding (Proxy)
+import Network.HTTP.Client hiding (Proxy,port)
 import Network.HTTP.Client.TLS
 import Network.HTTP2.Client.Servant
 import Network.HTTP2.Client
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
-type API = "hello" :> Capture "who" Text :> Get '[JSON] Int
+type API = "hello" :> Capture "who" Text :> Get '[JSON] Text
 
 api :: Proxy API
 api = Proxy
 
-handleHello :: Text -> Handler Int
-handleHello who = pure $ Text.length who
+handleHello :: Text -> Handler Text
+handleHello who = pure who
 
-sayHelloHttp :: Text -> ClientM Int
+sayHelloHttp :: Text -> ClientM Text
 sayHelloHttp = client  api
 
-sayHelloHttp2 :: Text -> H2ClientM Int
+sayHelloHttp2 :: Text -> H2ClientM Text
 sayHelloHttp2 = h2client api
 
 nIterations :: Int
-nIterations = 10000
+nIterations = 100000
 
 nTasks :: Int
-nTasks = 10
+nTasks = 50
+
+port = 8080
 
 someFunc :: IO ()
 someFunc = do
@@ -79,21 +86,24 @@ mainServer =
     warpOpts = setPort 8080 defaultSettings
 mainHttp q  = do
     print "http"
-    base <- parseBaseUrl "http://127.0.0.1:8080/"
+    base <- parseBaseUrl $ "http://127.0.0.1:" <> show port
     mgr <- newManager defaultManagerSettings
     let env = mkClientEnv mgr base
-    xs <- runTasks q $ \_ -> runClientM (sayHelloHttp "hello") env
+    xs <- runTasks q $ \_ -> runClientM (sayHelloHttp "world.json") env
+    print $ take 1 $ lefts xs
     print $ length $ rights xs
 mainHttps q = do
     print "https"
-    base <- parseBaseUrl "http://127.0.0.1:8080/"
-    mgr <- newTlsManager
+    base <- parseBaseUrl $ "https://127.0.0.1:" <> show port
+    let mgrSetts = mkManagerSettings (TLSSettings tlsParams) Nothing
+    mgr <- newTlsManagerWith mgrSetts
     let env = mkClientEnv mgr base
-    xs <- runTasks q $ \_ -> runClientM (sayHelloHttp "hello") env
+    xs <- runTasks q $ \_ -> runClientM (sayHelloHttp "world.json") env
+    print $ take 1 $ lefts xs
     print $ length $ rights xs
 mainHttp2 q = do
     print "http2"
-    frameConn <- newHttp2FrameConnection "127.0.0.1" 8080 (Just tlsParams)
+    frameConn <- newHttp2FrameConnection "127.0.0.1" port (Just tlsParams)
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         let icfc = _incomingFlowControl client
         _addCredit icfc 10000000
@@ -101,11 +111,12 @@ mainHttp2 q = do
             _ <- _updateWindow icfc
             threadDelay 100000
         let env = H2ClientEnv "127.0.0.1" client
-        xs <- runTasks q $ \_ -> runH2ClientM (sayHelloHttp2 "hello") env
+        xs <- runTasks q $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
+        print $ take 1 $ lefts xs
         print $ length $ rights xs
 mainHttp2c q = do
     print "http2c"
-    frameConn <- newHttp2FrameConnection "127.0.0.1" 8080 Nothing
+    frameConn <- newHttp2FrameConnection "127.0.0.1" port Nothing
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         let icfc = _incomingFlowControl client
         _addCredit icfc 10000000
@@ -113,7 +124,8 @@ mainHttp2c q = do
             _ <- _updateWindow icfc
             threadDelay 100000
         let env = H2ClientEnv "127.0.0.1" client
-        xs <- runTasks q $ \_ -> runH2ClientM (sayHelloHttp2 "hello") env
+        xs <- runTasks q $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
+        print $ take 1 $ lefts xs
         print $ length $ rights xs
 
 http2Settings = [
@@ -124,7 +136,7 @@ http2Settings = [
 tlsParams = TLS.ClientParams {
       TLS.clientWantSessionResume    = Nothing
     , TLS.clientUseMaxFragmentLength = Nothing
-    , TLS.clientServerIdentification = ("127.0.0.1", "8080")
+    , TLS.clientServerIdentification = ("127.0.0.1", ByteString.pack $ show port)
     , TLS.clientUseServerNameIndication = True
     , TLS.clientShared               = def
     , TLS.clientHooks                = def { TLS.onServerCertificate = \_ _ _ _ -> return []

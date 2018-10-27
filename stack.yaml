@@ -40,7 +40,9 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- http2-client-exe-0.1.0.0
+- http2-client-exe-0.1.0.1
+- ghc-events-0.8.0
+- profiterole-0.1
 # - servant-http2-client-0.1.0.2
 
 # Override default flag values for local packages and extra-deps
