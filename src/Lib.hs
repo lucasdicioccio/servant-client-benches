@@ -56,7 +56,7 @@ nIterations :: Int
 nIterations = 100000
 
 nTasks :: Int
-nTasks = 50
+nTasks = 10
 
 port = 8080
 
@@ -77,7 +77,7 @@ withQsem q f = do
   signalQSem q
   pure r
 
-runTasks q f = timeIt $ mapConcurrently (\n -> withQsem q $ f n) [1..nIterations]
+runTasks q f = timeIt $ mapConcurrently (\n -> withQsem q $! f n) [1..nIterations]
 
 mainServer =
     runTLS tlsOpts warpOpts (serve api (handleHello))
