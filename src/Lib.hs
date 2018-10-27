@@ -53,7 +53,7 @@ sayHelloHttp2 :: Text -> H2ClientM Text
 sayHelloHttp2 = h2client api
 
 nIterations :: Int
-nIterations = 100000
+nIterations = 10000
 
 nTasks :: Int
 nTasks = 10
@@ -63,45 +63,41 @@ port = 8080
 someFunc :: IO ()
 someFunc = do
     xs <- getArgs
-    q <- newQSem nTasks
     case xs of
         "server":_ -> mainServer
-        "http":_   -> mainHttp q
-        "https":_  -> mainHttps q
-        "http2":_  -> mainHttp2 q
-        "http2c":_ -> mainHttp2c q
+        "http":_   -> mainHttp
+        "https":_  -> mainHttps
+        "http2":_  -> mainHttp2
+        "http2c":_ -> mainHttp2c
 
-withQsem q f = do
-  waitQSem q
-  r <- f
-  signalQSem q
-  pure r
-
-runTasks q f = timeIt $ mapConcurrently (\n -> withQsem q $! f n) [1..nIterations]
+runTasks f = timeIt $ do
+  fmap mconcat $ mapConcurrently go [1..nTasks]
+  where
+    go n = replicateM nIterations (f n)
 
 mainServer =
     runTLS tlsOpts warpOpts (serve api (handleHello))
   where
     tlsOpts = (tlsSettings "cert.pem" "key.pem") { onInsecure = AllowInsecure }
     warpOpts = setPort 8080 defaultSettings
-mainHttp q  = do
+mainHttp = do
     print "http"
     base <- parseBaseUrl $ "http://127.0.0.1:" <> show port
     mgr <- newManager defaultManagerSettings
     let env = mkClientEnv mgr base
-    xs <- runTasks q $ \_ -> runClientM (sayHelloHttp "world.json") env
+    xs <- runTasks $ \_ -> runClientM (sayHelloHttp "world.json") env
     print $ take 1 $ lefts xs
     print $ length $ rights xs
-mainHttps q = do
+mainHttps = do
     print "https"
     base <- parseBaseUrl $ "https://127.0.0.1:" <> show port
     let mgrSetts = mkManagerSettings (TLSSettings tlsParams) Nothing
     mgr <- newTlsManagerWith mgrSetts
     let env = mkClientEnv mgr base
-    xs <- runTasks q $ \_ -> runClientM (sayHelloHttp "world.json") env
+    xs <- runTasks $ \_ -> runClientM (sayHelloHttp "world.json") env
     print $ take 1 $ lefts xs
     print $ length $ rights xs
-mainHttp2 q = do
+mainHttp2 = do
     print "http2"
     frameConn <- newHttp2FrameConnection "127.0.0.1" port (Just tlsParams)
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
@@ -111,10 +107,10 @@ mainHttp2 q = do
             _ <- _updateWindow icfc
             threadDelay 100000
         let env = H2ClientEnv "127.0.0.1" client
-        xs <- runTasks q $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
+        xs <- runTasks $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
         print $ take 1 $ lefts xs
         print $ length $ rights xs
-mainHttp2c q = do
+mainHttp2c = do
     print "http2c"
     frameConn <- newHttp2FrameConnection "127.0.0.1" port Nothing
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
@@ -124,7 +120,7 @@ mainHttp2c q = do
             _ <- _updateWindow icfc
             threadDelay 100000
         let env = H2ClientEnv "127.0.0.1" client
-        xs <- runTasks q $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
+        xs <- runTasks $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
         print $ take 1 $ lefts xs
         print $ length $ rights xs
 
