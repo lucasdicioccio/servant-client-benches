@@ -29,13 +29,6 @@ import qualified Data.ProtoLens.Runtime.Data.ByteString.Char8
 import qualified Data.ProtoLens.Runtime.Lens.Labels as Lens.Labels
 import qualified Data.ProtoLens.Runtime.Text.Read as Text.Read
 
-length ::
-       forall f s a .
-         (Prelude.Functor f, Lens.Labels.HasLens' s "length" a) =>
-         Lens.Family2.LensLike' f s a
-length
-  = Lens.Labels.lensOf'
-      ((Lens.Labels.proxy#) :: (Lens.Labels.Proxy#) "length")
 whom ::
      forall f s a .
        (Prelude.Functor f, Lens.Labels.HasLens' s "whom" a) =>

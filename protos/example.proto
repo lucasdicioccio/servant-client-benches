@@ -12,5 +12,5 @@ message HelloReq {
 }
 
 message HelloRsp {
-  int32 length = 1;
+  string whom = 1;
 }
