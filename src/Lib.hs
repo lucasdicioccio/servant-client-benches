@@ -38,6 +38,16 @@ import Network.HTTP2.Client
 import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
+
+import Control.Lens ((.~), (&))
+import Data.ProtoLens.Message (defMessage)
+import Network.GRPC.Server (runGrpc, unary, UnaryHandler)
+import Network.GRPC.Client (open, Timeout(..), singleRequest)
+import Network.GRPC.HTTP2.Types (RPC(..))
+import Network.GRPC.HTTP2.Encoding (gzip, uncompressed, Encoding(..), Decoding(..))
+import qualified Proto.Protos.Example as Example
+import qualified Proto.Protos.Example_Fields as Example
+
 type API = "hello" :> Capture "who" Text :> Get '[JSON] Text
 
 api :: Proxy API
@@ -45,6 +55,9 @@ api = Proxy
 
 handleHello :: Text -> Handler Text
 handleHello who = pure who
+
+grpcHandleHello :: UnaryHandler Example.Example "hello"
+grpcHandleHello _ ex = pure $ defMessage & Example.length .~ 5
 
 sayHelloHttp :: Text -> ClientM Text
 sayHelloHttp = client  api
@@ -65,10 +78,13 @@ someFunc = do
     xs <- getArgs
     case xs of
         "server":_ -> mainServer
+        "grpc-server":_ -> mainGrpcServer
         "http":_   -> mainHttp
         "https":_  -> mainHttps
         "http2":_  -> mainHttp2
         "http2c":_ -> mainHttp2c
+        "grpc":_   -> mainGrpc
+        "grpcc":_  -> mainGrpcc
 
 runTasks f = timeIt $ do
   fmap mconcat $ mapConcurrently go [1..nTasks]
@@ -77,6 +93,11 @@ runTasks f = timeIt $ do
 
 mainServer =
     runTLS tlsOpts warpOpts (serve api (handleHello))
+  where
+    tlsOpts = (tlsSettings "cert.pem" "key.pem") { onInsecure = AllowInsecure }
+    warpOpts = setPort 8080 defaultSettings
+mainGrpcServer =
+    runGrpc tlsOpts warpOpts [unary (RPC :: RPC Example.Example "hello") grpcHandleHello] [gzip]
   where
     tlsOpts = (tlsSettings "cert.pem" "key.pem") { onInsecure = AllowInsecure }
     warpOpts = setPort 8080 defaultSettings
@@ -123,6 +144,37 @@ mainHttp2c = do
         xs <- runTasks $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
         print $ take 1 $ lefts xs
         print $ length $ rights xs
+mainGrpc = do
+    print "grpc"
+    frameConn <- newHttp2FrameConnection "127.0.0.1" port (Just tlsParams)
+    runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
+        let icfc = _incomingFlowControl client
+        _addCredit icfc 10000000
+        _ <- forkIO $ forever $ do
+            _ <- _updateWindow icfc
+            threadDelay 100000
+        let runAction x y = open client "127.0.0.1:8080" [] (Timeout 10) (Encoding uncompressed) (Decoding uncompressed) (singleRequest x y)
+        xs <- runTasks $ \_ -> runAction (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json")
+        print $ take 1 $ lefts xs
+        print $ take 1 $ rights xs
+        print $ length $ rights xs
+        pure ()
+mainGrpcc = do
+    print "grpcc"
+    frameConn <- newHttp2FrameConnection "127.0.0.1" port Nothing
+    runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
+        let icfc = _incomingFlowControl client
+        _addCredit icfc 10000000
+        _ <- forkIO $ forever $ do
+            _ <- _updateWindow icfc
+            threadDelay 100000
+        let runAction x y = open client "127.0.0.1:8080" [] (Timeout 10) (Encoding uncompressed) (Decoding uncompressed) (singleRequest x y)
+        xs <- runTasks $ \_ -> runAction (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json")
+        print $ take 1 $ lefts xs
+        print $ take 1 $ rights xs
+        print $ length $ rights xs
+        pure ()
+
 
 http2Settings = [
    (HTTP2.SettingsInitialWindowSize, 10485760)

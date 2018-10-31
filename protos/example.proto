@@ -1,0 +1,16 @@
+
+syntax = "proto3";
+
+package example;
+
+service Example {
+  rpc Hello(HelloReq) returns (HelloRsp) {}
+}
+
+message HelloReq {
+  string whom = 1;
+}
+
+message HelloRsp {
+  int32 length = 1;
+}

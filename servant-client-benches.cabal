@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 74e94b31cfb2e565125c45f272d7f560afcfd1a23cf86eb8ba16eb9f4ef9cca3
+-- hash: 0d973413b4d937251193a9e10a8c8bbc9227d7af046af00578affa7ebf4ed4dc
 
 name:           servant-client-benches
 version:        0.1.0.0
@@ -28,10 +28,13 @@ source-repository head
 library
   exposed-modules:
       Lib
+      Proto.Protos.Example
+      Proto.Protos.Example_Fields
   other-modules:
       Paths_servant_client_benches
   hs-source-dirs:
       src
+      gen
   build-depends:
       aeson
     , async
@@ -44,7 +47,14 @@ library
     , http-client-tls
     , http2
     , http2-client
+    , http2-client-grpc
+    , http2-grpc-types
+    , lens
+    , lens-labels
     , mtl
+    , proto-lens
+    , proto-lens-protoc
+    , proto-lens-runtime
     , servant
     , servant-client
     , servant-http2-client
@@ -54,6 +64,7 @@ library
     , tls
     , transformers
     , warp >=3.2.24
+    , warp-grpc
     , warp-tls
   default-language: Haskell2010
 
@@ -76,7 +87,14 @@ executable servant-client-benches-exe
     , http-client-tls
     , http2
     , http2-client
+    , http2-client-grpc
+    , http2-grpc-types
+    , lens
+    , lens-labels
     , mtl
+    , proto-lens
+    , proto-lens-protoc
+    , proto-lens-runtime
     , servant
     , servant-client
     , servant-client-benches
@@ -87,6 +105,7 @@ executable servant-client-benches-exe
     , tls
     , transformers
     , warp >=3.2.24
+    , warp-grpc
     , warp-tls
   default-language: Haskell2010
 
@@ -110,7 +129,14 @@ test-suite servant-client-benches-test
     , http-client-tls
     , http2
     , http2-client
+    , http2-client-grpc
+    , http2-grpc-types
+    , lens
+    , lens-labels
     , mtl
+    , proto-lens
+    , proto-lens-protoc
+    , proto-lens-runtime
     , servant
     , servant-client
     , servant-client-benches
@@ -121,5 +147,6 @@ test-suite servant-client-benches-test
     , tls
     , transformers
     , warp >=3.2.24
+    , warp-grpc
     , warp-tls
   default-language: Haskell2010

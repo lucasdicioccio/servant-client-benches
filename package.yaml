@@ -42,9 +42,19 @@ dependencies:
 - mtl
 - transformers
 - async
+- warp-grpc
+- http2-client-grpc
+- http2-grpc-types
+- proto-lens
+- proto-lens-protoc
+- proto-lens-runtime
+- lens
+- lens-labels
 
 library:
-  source-dirs: src
+  source-dirs:
+  - src
+  - gen
 
 executables:
   servant-client-benches-exe:
