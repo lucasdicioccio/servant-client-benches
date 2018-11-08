@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0d973413b4d937251193a9e10a8c8bbc9227d7af046af00578affa7ebf4ed4dc
+-- hash: 9a648be1772eaeed3603831bbb8d368cd1a17886fb1da31ccf6ae3fd80970e90
 
 name:           servant-client-benches
 version:        0.1.0.0
@@ -42,6 +42,7 @@ library
     , bytestring
     , connection
     , data-default-class
+    , deepseq
     , exceptions
     , http-client
     , http-client-tls
@@ -82,6 +83,7 @@ executable servant-client-benches-exe
     , bytestring
     , connection
     , data-default-class
+    , deepseq
     , exceptions
     , http-client
     , http-client-tls
@@ -124,6 +126,7 @@ test-suite servant-client-benches-test
     , bytestring
     , connection
     , data-default-class
+    , deepseq
     , exceptions
     , http-client
     , http-client-tls

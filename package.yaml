@@ -42,6 +42,7 @@ dependencies:
 - mtl
 - transformers
 - async
+- deepseq
 - warp-grpc
 - http2-client-grpc
 - http2-grpc-types

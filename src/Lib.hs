@@ -41,7 +41,8 @@ import qualified Network.TLS as TLS
 import qualified Network.TLS.Extra.Cipher as TLS
 
 
-import Control.Lens ((.~), (&), (^.))
+import Control.Lens ((.~), (&), (^.), view, _Right)
+import Control.DeepSeq (force)
 import Data.ProtoLens.Message (defMessage)
 import Data.ProtoLens.Service.Types (MethodInput, MethodOutput, Service, HasMethod)
 import Network.GRPC.Server (runGrpc, unary, UnaryHandler)
@@ -74,11 +75,12 @@ runGrpcClient
   => Http2Client
   -> RPC s m
   -> MethodInput s m
-  -> IO (Either String (MethodOutput s m))
-runGrpcClient client x y = do
+  -> (MethodOutput s m -> b)
+  -> IO (Either String b)
+runGrpcClient client x y f = do
     x <- open client "127.0.0.1:8081" [] (Timeout 10) (Encoding uncompressed) (Decoding uncompressed) (singleRequest x y)
-    let v = case x of
-                (Right (Right (_,_,Right r))) -> seq r (Right r)
+    let !v = case x of
+                (Right (Right (_,_,Right r))) -> let ret = force f r in (Right ret)
                 _                             -> Left (show x)
     pure v
 
@@ -104,8 +106,9 @@ someFunc = do
         "grpc":_   -> mainGrpc
         "grpcc":_  -> mainGrpcc
 
+{-# INLINE runTasks #-}
 runTasks f = timeIt $ do
-  fmap mconcat $ mapConcurrently go [1..nTasks]
+    fmap mconcat $ mapConcurrently go [1..nTasks]
   where
     go n = replicateM nIterations (f n)
 
@@ -155,15 +158,18 @@ mainGrpc = do
     frameConn <- newHttp2FrameConnection "127.0.0.1" grpcport (Just tlsParams)
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         _ <- creditClientForever client
-        xs <- runTasks $ \_ -> runGrpcClient client (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json")
+        xs <- runTasks $ \_ -> runGrpcClient client (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json") getWhom
         printResults xs
 mainGrpcc = do
     print "grpcc"
     frameConn <- newHttp2FrameConnection "127.0.0.1" grpcport Nothing
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         _ <- creditClientForever client
-        xs <- runTasks $ \_ -> runGrpcClient client (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json")
+        xs <- runTasks $ \_ -> runGrpcClient client (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json") getWhom
         printResults xs
+
+getWhom :: Example.HelloRsp -> Text
+getWhom = view Example.whom
 
 printResults xs = do
     print $ take 1 $ lefts xs
