@@ -5,6 +5,7 @@ package example;
 
 service Example {
   rpc Hello(HelloReq) returns (HelloRsp) {}
+  rpc LargeArray(LargeArrayReq) returns (LargeArrayRsp) {}
 }
 
 message HelloReq {
@@ -13,4 +14,11 @@ message HelloReq {
 
 message HelloRsp {
   string whom = 1;
+}
+
+message LargeArrayReq {
+}
+
+message LargeArrayRsp {
+  repeated int32 vals = 1;
 }

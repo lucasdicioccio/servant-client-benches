@@ -29,6 +29,13 @@ import qualified Data.ProtoLens.Runtime.Data.ByteString.Char8
 import qualified Data.ProtoLens.Runtime.Lens.Labels as Lens.Labels
 import qualified Data.ProtoLens.Runtime.Text.Read as Text.Read
 
+vals ::
+     forall f s a .
+       (Prelude.Functor f, Lens.Labels.HasLens' s "vals" a) =>
+       Lens.Family2.LensLike' f s a
+vals
+  = Lens.Labels.lensOf'
+      ((Lens.Labels.proxy#) :: (Lens.Labels.Proxy#) "vals")
 whom ::
      forall f s a .
        (Prelude.Functor f, Lens.Labels.HasLens' s "whom" a) =>

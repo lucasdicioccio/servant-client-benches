@@ -26,6 +26,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.ByteString.Char8 as ByteString
 import qualified Data.ByteString.Lazy.Char8 as LByteString
+import GHC.Int (Int32)
 import GHC.Generics
 import GHC.TypeLits
 import Network.Wai.Handler.Warp
@@ -53,21 +54,32 @@ import qualified Proto.Protos.Example as Example
 import qualified Proto.Protos.Example_Fields as Example
 
 type API = "hello" :> Capture "who" Text :> Get '[JSON] Text
+  :<|> "large-array" :> Get '[JSON] [Int]
 
 api :: Proxy API
 api = Proxy
 
+-- SERVER --
 handleHello :: Text -> Handler Text
 handleHello who = pure who
 
-sayHelloHttp :: Text -> ClientM Text
-sayHelloHttp = client  api
-
-sayHelloHttp2 :: Text -> H2ClientM Text
-sayHelloHttp2 = h2client api
-
 grpcHandleHello :: UnaryHandler Example.Example "hello"
 grpcHandleHello _ ex = pure $ defMessage & Example.whom .~ (ex ^.Example.whom)
+
+handleLargeArray :: Handler [Int]
+handleLargeArray = pure [1..1000]
+
+grpcHandleLargeArray :: UnaryHandler Example.Example "largeArray"
+grpcHandleLargeArray _ ex = pure $ defMessage & Example.vals .~ [1..1000]
+
+-- CLIENT --
+sayHelloHttp :: Text -> ClientM Text
+getLargeArrayHttp :: ClientM [Int]
+sayHelloHttp :<|> getLargeArrayHttp = client  api
+
+sayHelloHttp2 :: Text -> H2ClientM Text
+getLargeArrayHttp2 :: H2ClientM [Int]
+sayHelloHttp2 :<|> getLargeArrayHttp2 = h2client api
 
 {-# INLINE runGrpcClient #-}
 runGrpcClient
@@ -85,7 +97,7 @@ runGrpcClient client x y f = do
     pure v
 
 nIterations :: Int
-nIterations = 10000
+nIterations = 100
 
 nTasks :: Int
 nTasks = 10
@@ -99,12 +111,35 @@ someFunc = do
     case xs of
         "server":_ -> mainServer
         "grpc-server":_ -> mainGrpcServer
-        "http":_   -> mainHttp
-        "https":_  -> mainHttps
-        "http2":_  -> mainHttp2
-        "http2c":_ -> mainHttp2c
-        "grpc":_   -> mainGrpc
-        "grpcc":_  -> mainGrpcc
+        -- HELLO
+        "http":[]  -> mainHttp $ sayHelloHttp "world.json"
+        "https":[] -> mainHttps $ sayHelloHttp "world.json"
+        "http2":[] -> mainHttp2 $ sayHelloHttp2 "world.json"
+        "http2c":[]-> mainHttp2c $ sayHelloHttp2 "world.json"
+        "grpc":[]  -> mainGrpc (RPC :: RPC Example.Example "hello")
+                              (defMessage & Example.whom .~ "world.json")
+                              getWhom
+        "grpcc":[] -> mainGrpcc (RPC :: RPC Example.Example "hello")
+                               (defMessage & Example.whom .~ "world.json")
+                               getWhom
+
+        -- ARRAY
+        "http":"array":_  -> mainHttp $ getLargeArrayHttp
+        "https":"array":_ -> mainHttps $ getLargeArrayHttp
+        "http2":"array":_ -> mainHttp2 $ getLargeArrayHttp2
+        "http2c":"array":_-> mainHttp2c $ getLargeArrayHttp2
+        "grpc":"array":_  -> mainGrpc (RPC :: RPC Example.Example "largeArray")
+                              defMessage
+                              getArrayVals
+        "grpcc":"array":_ -> mainGrpcc (RPC :: RPC Example.Example "largeArray")
+                               defMessage
+                               getArrayVals
+
+getWhom :: Example.HelloRsp -> Text
+getWhom = view Example.whom
+
+getArrayVals :: Example.LargeArrayRsp -> [Int32]
+getArrayVals = view Example.vals
 
 {-# INLINE runTasks #-}
 runTasks f = timeIt $ do
@@ -113,63 +148,72 @@ runTasks f = timeIt $ do
     go n = replicateM nIterations (f n)
 
 mainServer =
-    runTLS tlsOpts warpOpts (serve api (handleHello))
+    runTLS tlsOpts warpOpts (serve api (handleHello :<|> handleLargeArray))
   where
     tlsOpts = (tlsSettings "cert.pem" "key.pem") { onInsecure = AllowInsecure }
-    warpOpts = setPort 8080 defaultSettings
+    warpOpts = setPort (read . show $ port) defaultSettings
 mainGrpcServer =
-    runGrpc tlsOpts warpOpts [unary (RPC :: RPC Example.Example "hello") grpcHandleHello] [gzip]
+    runGrpc tlsOpts warpOpts [unary (RPC :: RPC Example.Example "hello") grpcHandleHello, unary (RPC :: RPC Example.Example "largeArray") grpcHandleLargeArray] [gzip]
   where
     tlsOpts = (tlsSettings "cert.pem" "key.pem") { onInsecure = AllowInsecure }
-    warpOpts = setPort 8081 defaultSettings
-mainHttp = do
+    warpOpts = setPort (read . show $ grpcport) defaultSettings
+mainHttp query = do
     print "http"
     base <- parseBaseUrl $ "http://127.0.0.1:" <> show port
     mgr <- newManager defaultManagerSettings
     let env = mkClientEnv mgr base
-    xs <- runTasks $ \_ -> runClientM (sayHelloHttp "world.json") env
+    xs <- runTasks $ \_ -> runClientM query env
     printResults xs
-mainHttps = do
+mainHttps query = do
     print "https"
     base <- parseBaseUrl $ "https://127.0.0.1:" <> show port
     let mgrSetts = mkManagerSettings (TLSSettings tlsParams) Nothing
     mgr <- newTlsManagerWith mgrSetts
     let env = mkClientEnv mgr base
-    xs <- runTasks $ \_ -> runClientM (sayHelloHttp "world.json") env
+    xs <- runTasks $ \_ -> runClientM query env
     printResults xs
-mainHttp2 = do
+mainHttp2 query = do
     print "http2"
     frameConn <- newHttp2FrameConnection "127.0.0.1" port (Just tlsParams)
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         _ <- creditClientForever client
         let env = H2ClientEnv "127.0.0.1" client
-        xs <- runTasks $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
+        xs <- runTasks $ \_ -> runH2ClientM query env
         printResults xs
-mainHttp2c = do
+mainHttp2c query = do
     print "http2c"
     frameConn <- newHttp2FrameConnection "127.0.0.1" port Nothing
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         _ <- creditClientForever client
         let env = H2ClientEnv "127.0.0.1" client
-        xs <- runTasks $ \_ -> runH2ClientM (sayHelloHttp2 "world.json") env
+        xs <- runTasks $ \_ -> runH2ClientM query env
         printResults xs
-mainGrpc = do
+mainGrpc
+  :: (Service s, HasMethod s m, Show (MethodOutput s m), Show b)
+  => RPC s m
+  -> MethodInput s m
+  -> (MethodOutput s m -> b)
+  -> IO ()
+mainGrpc rpc msg frsp = do
     print "grpc"
     frameConn <- newHttp2FrameConnection "127.0.0.1" grpcport (Just tlsParams)
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         _ <- creditClientForever client
-        xs <- runTasks $ \_ -> runGrpcClient client (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json") getWhom
+        xs <- runTasks $ \_ -> runGrpcClient client rpc msg frsp
         printResults xs
-mainGrpcc = do
+mainGrpcc
+  :: (Service s, HasMethod s m, Show (MethodOutput s m), Show b)
+  => RPC s m
+  -> MethodInput s m
+  -> (MethodOutput s m -> b)
+  -> IO ()
+mainGrpcc rpc msg frsp = do
     print "grpcc"
     frameConn <- newHttp2FrameConnection "127.0.0.1" grpcport Nothing
     runHttp2Client frameConn 8192 8192 http2Settings defaultGoAwayHandler ignoreFallbackHandler $ \client -> do
         _ <- creditClientForever client
-        xs <- runTasks $ \_ -> runGrpcClient client (RPC :: RPC Example.Example "hello") (defMessage & Example.whom .~ "world.json") getWhom
+        xs <- runTasks $ \_ -> runGrpcClient client rpc msg frsp
         printResults xs
-
-getWhom :: Example.HelloRsp -> Text
-getWhom = view Example.whom
 
 printResults xs = do
     print $ take 1 $ lefts xs
